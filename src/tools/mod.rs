@@ -139,15 +139,17 @@ pub fn audit_code(source: &str, language: &str) -> Value {
     }
 
     // Missing error handling
-    if language == "python" && !source.contains("try:") && !source.contains("except") {
-        if source.len() > 200 {
-            findings.push(json!({
-                "type": "missing_error_handling",
-                "severity": "medium",
-                "description": "No try/except blocks found. Add error handling."
-            }));
-            score = score.saturating_sub(5);
-        }
+    if language == "python"
+        && !source.contains("try:")
+        && !source.contains("except")
+        && source.len() > 200
+    {
+        findings.push(json!({
+            "type": "missing_error_handling",
+            "severity": "medium",
+            "description": "No try/except blocks found. Add error handling."
+        }));
+        score = score.saturating_sub(5);
     }
 
     json!({

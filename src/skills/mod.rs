@@ -300,6 +300,7 @@ impl SkillRegistry {
         self.skills.read().unwrap().get(id).cloned()
     }
 
+    #[allow(dead_code)]
     pub fn register_skill(&self, skill: Skill) {
         self.skills.write().unwrap().insert(skill.id.clone(), skill);
     }
@@ -313,6 +314,7 @@ impl SkillRegistry {
             .push(skill_id.to_string());
     }
 
+    #[allow(dead_code)]
     pub fn get_agent_skills(&self, agent_id: &str) -> Vec<Skill> {
         let agent_skills = self.agent_skills.read().unwrap();
         let skill_ids = agent_skills.get(agent_id).cloned().unwrap_or_default();
@@ -340,6 +342,7 @@ impl SkillRegistry {
         self.skills.write().unwrap().insert(skill.id.clone(), skill);
     }
 
+    #[allow(dead_code)]
     pub fn toggle_skill(&self, skill_id: &str, enabled: bool) -> bool {
         if let Some(skill) = self.skills.write().unwrap().get_mut(skill_id) {
             skill.enabled = enabled;
