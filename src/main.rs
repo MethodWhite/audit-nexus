@@ -17,9 +17,9 @@
 //! - Expert: Novel exploit detection, zero-day analysis, advanced RE
 //! - Principal: Architecture-level security review, threat modeling, APT analysis
 
+use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
-use serde_json::{json, Value};
 
 mod skills;
 mod tools;
@@ -48,16 +48,23 @@ impl AuditServer {
         let mut reader = io::BufReader::new(stdin.lock());
 
         eprintln!("╔══════════════════════════════════════════════════════════╗");
-        eprintln!("║  AUDIT-Nexus v{} - Cybersecurity MCP Server           ║", env!("CARGO_PKG_VERSION"));
+        eprintln!(
+            "║  AUDIT-Nexus v{} - Cybersecurity MCP Server           ║",
+            env!("CARGO_PKG_VERSION")
+        );
         eprintln!("║  Skills: 20 | Tools: 25+ | Seniority: Jr→Principal    ║");
         eprintln!("╚══════════════════════════════════════════════════════════╝");
         eprintln!();
 
         loop {
             let mut line = String::new();
-            if reader.read_line(&mut line)? == 0 { break; }
+            if reader.read_line(&mut line)? == 0 {
+                break;
+            }
             let line = line.trim();
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
 
             if let Some(response) = self.handle_message(line) {
                 writeln!(stdout, "{}", response)?;
@@ -71,10 +78,13 @@ impl AuditServer {
         let request: Value = match serde_json::from_str(message) {
             Ok(v) => v,
             Err(_) => {
-                return Some(json!({
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32700, "message": "Invalid JSON"}
-                }).to_string())
+                return Some(
+                    json!({
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32700, "message": "Invalid JSON"}
+                    })
+                    .to_string(),
+                )
             }
         };
 
@@ -86,10 +96,13 @@ impl AuditServer {
 
         let result = match method {
             "initialize" => {
-                let client_name = params["clientInfo"]["name"].as_str().unwrap_or("mcp-client");
+                let client_name = params["clientInfo"]["name"]
+                    .as_str()
+                    .unwrap_or("mcp-client");
                 *self.current_agent_id.write().unwrap() = client_name.to_string();
                 // Auto-assign default security-generalist skill so agent can use tools immediately
-                self.skills.assign_skill_to_agent(client_name, "security-generalist");
+                self.skills
+                    .assign_skill_to_agent(client_name, "security-generalist");
                 Ok(json!({
                     "jsonrpc": "2.0", "id": id,
                     "result": {
@@ -100,7 +113,9 @@ impl AuditServer {
                 }))
             }
             "initialized" => Ok(json!(null)),
-            "shutdown" => { std::process::exit(0); }
+            "shutdown" => {
+                std::process::exit(0);
+            }
             "tools/list" => Ok(self.list_tools(id)),
             "tools/call" => self.call_tool(id, params),
             _ => Ok(json!({
@@ -111,16 +126,21 @@ impl AuditServer {
 
         match result {
             Ok(resp) => {
-                if is_notification { None }
-                else { serde_json::to_string(&resp).ok() }
+                if is_notification {
+                    None
+                } else {
+                    serde_json::to_string(&resp).ok()
+                }
             }
             Err(e) => {
-                if is_notification { None }
-                else {
+                if is_notification {
+                    None
+                } else {
                     serde_json::to_string(&json!({
                         "jsonrpc": "2.0", "id": id,
                         "error": {"code": -32603, "message": e}
-                    })).ok()
+                    }))
+                    .ok()
                 }
             }
         }
@@ -254,14 +274,23 @@ impl AuditServer {
             "osint_email" => self.cmd_osint_email(args),
             "osint_domain" => self.cmd_osint_domain(args),
 
-            _ => return Ok(json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": format!("Unknown tool: {}", name) } })),
+            _ => {
+                return Ok(
+                    json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32601, "message": format!("Unknown tool: {}", name) } }),
+                )
+            }
         };
 
-        Ok(json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": serde_json::to_string_pretty(&result).unwrap_or_default() }] } }))
+        Ok(
+            json!({ "jsonrpc": "2.0", "id": id, "result": { "content": [{ "type": "text", "text": serde_json::to_string_pretty(&result).unwrap_or_default() }] } }),
+        )
     }
 
     fn is_management_tool(&self, name: &str) -> bool {
-        matches!(name, "skills_list" | "skills_assign" | "skills_register" | "seniority_set" | "seniority_get")
+        matches!(
+            name,
+            "skills_list" | "skills_assign" | "skills_register" | "seniority_set" | "seniority_get"
+        )
     }
 
     // ══════════════════════════════════════════════════
@@ -297,19 +326,32 @@ impl AuditServer {
     fn cmd_skills_register(&self, args: &Value) -> Value {
         let name = args["name"].as_str().unwrap_or("Unnamed").to_string();
         let category = args["category"].as_str().unwrap_or("general");
-        let min_seniority = Seniority::from_str(args["min_seniority"].as_str().unwrap_or("mid")).unwrap_or(Seniority::Mid);
-        let tools: Vec<String> = args["tools"].as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        let min_seniority = Seniority::from_str(args["min_seniority"].as_str().unwrap_or("mid"))
+            .unwrap_or(Seniority::Mid);
+        let tools: Vec<String> = args["tools"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default();
 
         let skill = Skill {
             id: format!("custom-{}", name.to_lowercase().replace(' ', "-")),
             name,
-            category: serde_json::from_value::<SkillCategory>(json!(category)).unwrap_or(SkillCategory::General),
-            description: args["description"].as_str().unwrap_or("Custom skill").to_string(),
+            category: serde_json::from_value::<SkillCategory>(json!(category))
+                .unwrap_or(SkillCategory::General),
+            description: args["description"]
+                .as_str()
+                .unwrap_or("Custom skill")
+                .to_string(),
             min_seniority,
             tools,
-            methodology: args["methodology"].as_str().unwrap_or("Custom methodology").to_string(),
+            methodology: args["methodology"]
+                .as_str()
+                .unwrap_or("Custom methodology")
+                .to_string(),
             enabled: true,
         };
         let skill_id = skill.id.clone();
@@ -349,7 +391,10 @@ impl AuditServer {
     }
 
     fn cmd_audit_deps(&self, args: &Value) -> Value {
-        t::audit_deps(args["deps_text"].as_str().unwrap_or(""), args["ecosystem"].as_str().unwrap_or("generic"))
+        t::audit_deps(
+            args["deps_text"].as_str().unwrap_or(""),
+            args["ecosystem"].as_str().unwrap_or("generic"),
+        )
     }
 
     fn cmd_audit_config(&self, args: &Value) -> Value {
@@ -381,11 +426,18 @@ impl AuditServer {
         let code_audit = self.cmd_audit_code(args);
         let secrets_audit = t::audit_secrets(args["code"].as_str().unwrap_or(""));
         let deps_audit = if args.get("deps_text").is_some() {
-            Some(t::audit_deps(args["deps_text"].as_str().unwrap_or(""), args["ecosystem"].as_str().unwrap_or("generic")))
-        } else { None };
+            Some(t::audit_deps(
+                args["deps_text"].as_str().unwrap_or(""),
+                args["ecosystem"].as_str().unwrap_or("generic"),
+            ))
+        } else {
+            None
+        };
         let config_audit = if args.get("config_text").is_some() {
             Some(self.cmd_audit_config(args))
-        } else { None };
+        } else {
+            None
+        };
 
         json!({
             "code_audit": code_audit,
@@ -414,7 +466,11 @@ impl AuditServer {
 
     fn cmd_re_hexdump(&self, args: &Value) -> Value {
         match Self::decode_hex(args) {
-            Some(data) => t::re_hexdump(&data, args["offset"].as_u64().unwrap_or(0) as usize, args["length"].as_u64().unwrap_or(256) as usize),
+            Some(data) => t::re_hexdump(
+                &data,
+                args["offset"].as_u64().unwrap_or(0) as usize,
+                args["length"].as_u64().unwrap_or(256) as usize,
+            ),
             None => json!({"error": "Invalid hex data"}),
         }
     }
@@ -438,7 +494,10 @@ impl AuditServer {
     // ══════════════════════════════════════════════════
 
     fn cmd_pentest_service(&self, args: &Value) -> Value {
-        t::pentest_analyze_service(args["service_name"].as_str().unwrap_or(""), args["version"].as_str().unwrap_or(""))
+        t::pentest_analyze_service(
+            args["service_name"].as_str().unwrap_or(""),
+            args["version"].as_str().unwrap_or(""),
+        )
     }
 
     fn cmd_pentest_exploit_chain(&self, args: &Value) -> Value {
@@ -451,32 +510,69 @@ impl AuditServer {
         let checklist: Vec<&str> = match target_type {
             "webapp" => vec![
                 "OWASP Top 10 (2021) audit",
-                "Authentication bypass (JWT, session, OAuth)", "Authorization (IDOR, privilege escalation)",
-                "Injection (SQL, NoSQL, Command, SSTI)", "XSS (reflected, stored, DOM)", "CSRF",
-                "File upload (path traversal, RCE via upload)", "SSRF", "XXE",
-                "API endpoint enumeration", "CORS misconfig", "Rate limiting bypass",
+                "Authentication bypass (JWT, session, OAuth)",
+                "Authorization (IDOR, privilege escalation)",
+                "Injection (SQL, NoSQL, Command, SSTI)",
+                "XSS (reflected, stored, DOM)",
+                "CSRF",
+                "File upload (path traversal, RCE via upload)",
+                "SSRF",
+                "XXE",
+                "API endpoint enumeration",
+                "CORS misconfig",
+                "Rate limiting bypass",
             ],
             "api" => vec![
-                "Authentication (API keys, JWT, OAuth2)", "Rate limiting", "BOLA/IDOR",
-                "Mass assignment", "Excessive data exposure", "GraphQL introspection",
-                "REST API versioning issues", "Input validation bypass", "HTTP method override",
+                "Authentication (API keys, JWT, OAuth2)",
+                "Rate limiting",
+                "BOLA/IDOR",
+                "Mass assignment",
+                "Excessive data exposure",
+                "GraphQL introspection",
+                "REST API versioning issues",
+                "Input validation bypass",
+                "HTTP method override",
             ],
             "network" => vec![
-                "Nmap scan (all ports)", "Service version enumeration", "Firewall rule audit",
-                "DNS zone transfer attempt", "SNMP enumeration", "SMB share enumeration",
-                "VLAN hopping check", "ARP spoofing detection", "Rogue DHCP detection",
+                "Nmap scan (all ports)",
+                "Service version enumeration",
+                "Firewall rule audit",
+                "DNS zone transfer attempt",
+                "SNMP enumeration",
+                "SMB share enumeration",
+                "VLAN hopping check",
+                "ARP spoofing detection",
+                "Rogue DHCP detection",
             ],
             "cloud" => vec![
-                "S3 bucket permissions", "IAM role enumeration", "Security group audit",
-                "CloudTrail logging enabled", "KMS key rotation", "Lambda environment variables",
-                "RDS public accessibility", "EBS encryption", "VPC flow logs",
+                "S3 bucket permissions",
+                "IAM role enumeration",
+                "Security group audit",
+                "CloudTrail logging enabled",
+                "KMS key rotation",
+                "Lambda environment variables",
+                "RDS public accessibility",
+                "EBS encryption",
+                "VPC flow logs",
             ],
             "container" => vec![
-                "Privileged mode check", "Capabilities audit", "Read-only root filesystem",
-                "Resource limits (CPU/memory)", "Seccomp/AppArmor profiles", "Image vulnerability scan",
-                "Docker socket exposure", "Network mode (host)", "Rootless mode",
+                "Privileged mode check",
+                "Capabilities audit",
+                "Read-only root filesystem",
+                "Resource limits (CPU/memory)",
+                "Seccomp/AppArmor profiles",
+                "Image vulnerability scan",
+                "Docker socket exposure",
+                "Network mode (host)",
+                "Rootless mode",
             ],
-            _ => vec!["Reconnaissance", "Enumeration", "Vulnerability identification", "Exploitation", "Post-exploitation"],
+            _ => vec![
+                "Reconnaissance",
+                "Enumeration",
+                "Vulnerability identification",
+                "Exploitation",
+                "Post-exploitation",
+            ],
         };
         json!({ "target_type": target_type, "checklist": checklist, "phases": ["Recon", "Enumeration", "Exploitation", "Privilege Escalation", "Persistence", "Cleanup"] })
     }

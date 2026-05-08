@@ -4,8 +4,8 @@
 //! Tools are gated by skill seniority levels from the SkillRegistry.
 
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::process::Command;
-use sha2::{Sha256, Digest};
 
 // ═══════════════════════════════════════════════════════════
 // AUDIT TOOLS
@@ -17,10 +17,22 @@ pub fn audit_code(source: &str, language: &str) -> Value {
 
     // Hardcoded secrets patterns
     let secret_patterns = [
-        ("API key", r#"(?i)(api[_-]?key|apikey|api_secret)\s*[:=]\s*['"][^'"]{8,}['"]"#),
-        ("Password", r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"][^'"]+"#),
-        ("Token", r#"(?i)(token|secret|jwt)\s*[:=]\s*['"][^'"]{8,}['"]"#),
-        ("Private key", r#"-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----"#),
+        (
+            "API key",
+            r#"(?i)(api[_-]?key|apikey|api_secret)\s*[:=]\s*['"][^'"]{8,}['"]"#,
+        ),
+        (
+            "Password",
+            r#"(?i)(password|passwd|pwd)\s*[:=]\s*['"][^'"]+"#,
+        ),
+        (
+            "Token",
+            r#"(?i)(token|secret|jwt)\s*[:=]\s*['"][^'"]{8,}['"]"#,
+        ),
+        (
+            "Private key",
+            r#"-----BEGIN (RSA|EC|DSA|OPENSSH) PRIVATE KEY-----"#,
+        ),
         ("AWS key", r#"(?i)(AKIA[0-9A-Z]{16}|aws_access_key_id)"#),
     ];
 
@@ -41,19 +53,47 @@ pub fn audit_code(source: &str, language: &str) -> Value {
     // Dangerous functions by language
     let dangerous: &[(&str, &str, &str)] = match language {
         "c" | "cpp" | "c++" => &[
-            ("strcpy", "critical", "Buffer overflow risk - use strncpy or strlcpy"),
+            (
+                "strcpy",
+                "critical",
+                "Buffer overflow risk - use strncpy or strlcpy",
+            ),
             ("gets", "critical", "Buffer overflow - use fgets instead"),
-            ("sprintf", "high", "Format string vulnerability - use snprintf"),
+            (
+                "sprintf",
+                "high",
+                "Format string vulnerability - use snprintf",
+            ),
             ("system", "high", "Command injection risk - sanitize input"),
             ("popen", "high", "Command injection risk"),
             ("malloc", "low", "Check for NULL return"),
         ],
         "python" => &[
-            ("eval(", "critical", "Code injection - never eval() user input"),
-            ("exec(", "critical", "Code injection - never exec() user input"),
-            ("pickle.loads", "critical", "Deserialization RCE - use json instead"),
-            ("os.system", "high", "Command injection risk - use subprocess.run with list"),
-            ("subprocess.call.*shell=True", "high", "Shell injection risk"),
+            (
+                "eval(",
+                "critical",
+                "Code injection - never eval() user input",
+            ),
+            (
+                "exec(",
+                "critical",
+                "Code injection - never exec() user input",
+            ),
+            (
+                "pickle.loads",
+                "critical",
+                "Deserialization RCE - use json instead",
+            ),
+            (
+                "os.system",
+                "high",
+                "Command injection risk - use subprocess.run with list",
+            ),
+            (
+                "subprocess.call.*shell=True",
+                "high",
+                "Shell injection risk",
+            ),
             ("hashlib.md5", "low", "Weak hash - use SHA256+"),
         ],
         "javascript" | "typescript" => &[
@@ -66,7 +106,11 @@ pub fn audit_code(source: &str, language: &str) -> Value {
         "rust" => &[
             ("unsafe", "high", "Unsafe block - audit manually"),
             ("unwrap()", "low", "Consider proper error handling"),
-            ("std::process::Command", "medium", "Command execution - sanitize input"),
+            (
+                "std::process::Command",
+                "medium",
+                "Command execution - sanitize input",
+            ),
         ],
         "go" => &[
             ("exec.Command", "high", "Command injection risk"),
@@ -118,15 +162,33 @@ pub fn audit_code(source: &str, language: &str) -> Value {
 pub fn audit_secrets(source: &str) -> Value {
     let patterns = [
         ("AWS Access Key", r#"AKIA[0-9A-Z]{16}"#),
-        ("AWS Secret Key", r#"(?i)aws.{0,5}secret.{0,10}[=:]\s*['"][^'"]{16,}['"]"#),
+        (
+            "AWS Secret Key",
+            r#"(?i)aws.{0,5}secret.{0,10}[=:]\s*['"][^'"]{16,}['"]"#,
+        ),
         ("GitHub Token", r#"gh[pousr]_[A-Za-z0-9_]{36}"#),
         ("GitHub PAT", r#"github_pat_[A-Za-z0-9_]{22,}"#),
-        ("JWT Token", r#"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#),
+        (
+            "JWT Token",
+            r#"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"#,
+        ),
         ("Slack Token", r#"xox[baprs]-[0-9A-Za-z-]{10,50}"#),
-        ("SSH Private Key", r#"-----BEGIN (RSA|OPENSSH|EC) PRIVATE KEY-----"#),
-        ("Generic API Key", r#"(?i)(api.key|secret|token|password).{0,10}[:=]\s*['"][A-Za-z0-9+/=]{20,}['"]"#),
-        ("IP Address (internal)", r#"\b(10\.\d{1,3}|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b"#),
-        ("Email Address", r#"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#),
+        (
+            "SSH Private Key",
+            r#"-----BEGIN (RSA|OPENSSH|EC) PRIVATE KEY-----"#,
+        ),
+        (
+            "Generic API Key",
+            r#"(?i)(api.key|secret|token|password).{0,10}[:=]\s*['"][A-Za-z0-9+/=]{20,}['"]"#,
+        ),
+        (
+            "IP Address (internal)",
+            r#"\b(10\.\d{1,3}|172\.(1[6-9]|2\d|3[01])|192\.168)\.\d{1,3}\.\d{1,3}\b"#,
+        ),
+        (
+            "Email Address",
+            r#"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#,
+        ),
     ];
 
     let mut found = Vec::new();
@@ -162,11 +224,36 @@ pub fn audit_deps(deps_text: &str, ecosystem: &str) -> Value {
     let known_vuln_patterns = [
         ("log4j", "CVE-2021-44228", "critical", "Log4Shell RCE"),
         ("struts2", "CVE-2017-5638", "critical", "Struts2 RCE"),
-        ("spring4shell|spring-beans.*5\\.3\\.", "CVE-2022-22965", "critical", "Spring4Shell RCE"),
-        ("fastjson.*1\\.2\\.[0-7]", "CVE-2022-25845", "critical", "Fastjson RCE"),
-        ("openssl.*1\\.1\\.[0-1][a-l]", "CVE-2022-3602", "high", "OpenSSL buffer overflow"),
-        ("jackson-databind.*2\\.1[0-2]\\.", "CVE-2020-36518", "high", "Jackson DoS"),
-        ("requests.*2\\.[0-2][0-7]\\.", "CVE-2023-32681", "medium", "Requests proxy leak"),
+        (
+            "spring4shell|spring-beans.*5\\.3\\.",
+            "CVE-2022-22965",
+            "critical",
+            "Spring4Shell RCE",
+        ),
+        (
+            "fastjson.*1\\.2\\.[0-7]",
+            "CVE-2022-25845",
+            "critical",
+            "Fastjson RCE",
+        ),
+        (
+            "openssl.*1\\.1\\.[0-1][a-l]",
+            "CVE-2022-3602",
+            "high",
+            "OpenSSL buffer overflow",
+        ),
+        (
+            "jackson-databind.*2\\.1[0-2]\\.",
+            "CVE-2020-36518",
+            "high",
+            "Jackson DoS",
+        ),
+        (
+            "requests.*2\\.[0-2][0-7]\\.",
+            "CVE-2023-32681",
+            "medium",
+            "Requests proxy leak",
+        ),
     ];
 
     for (pat, cve, severity, desc) in &known_vuln_patterns {
@@ -214,13 +301,23 @@ pub fn re_strings(data: &[u8], min_len: usize) -> Value {
     strings.sort();
     strings.dedup();
 
-    let suspicious: Vec<&str> = strings.iter()
+    let suspicious: Vec<&str> = strings
+        .iter()
         .filter(|s| {
-            s.contains("http://") || s.contains("https://") ||
-            s.contains("key") || s.contains("pass") || s.contains("secret") ||
-            s.contains(".exe") || s.contains(".dll") || s.contains(".so") ||
-            s.contains("/bin/") || s.contains("cmd") || s.contains("shell") ||
-            s.contains("HACK") || s.contains("ADMIN") || s.contains("root")
+            s.contains("http://")
+                || s.contains("https://")
+                || s.contains("key")
+                || s.contains("pass")
+                || s.contains("secret")
+                || s.contains(".exe")
+                || s.contains(".dll")
+                || s.contains(".so")
+                || s.contains("/bin/")
+                || s.contains("cmd")
+                || s.contains("shell")
+                || s.contains("HACK")
+                || s.contains("ADMIN")
+                || s.contains("root")
         })
         .map(|s| s.as_str())
         .collect();
@@ -247,15 +344,23 @@ pub fn re_hexdump(data: &[u8], offset: usize, length: usize) -> Value {
     let mut hex_lines = Vec::new();
     for (i, chunk) in slice.chunks(16).enumerate() {
         let addr = start + i * 16;
-        let hex: String = chunk.iter()
+        let hex: String = chunk
+            .iter()
             .map(|b| format!("{:02x}", b))
             .collect::<Vec<_>>()
             .chunks(2)
             .map(|p| p.join(""))
             .collect::<Vec<_>>()
             .join(" ");
-        let ascii: String = chunk.iter()
-            .map(|&b| if b.is_ascii_graphic() || b == b' ' { b as char } else { '.' })
+        let ascii: String = chunk
+            .iter()
+            .map(|&b| {
+                if b.is_ascii_graphic() || b == b' ' {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
             .collect();
         hex_lines.push(format!("{:08x}  {:48}  |{}|", addr, hex, ascii));
     }
@@ -275,9 +380,12 @@ pub fn re_entropy(data: &[u8]) -> Value {
     }
 
     let mut freq = [0u64; 256];
-    for &b in data { freq[b as usize] += 1; }
+    for &b in data {
+        freq[b as usize] += 1;
+    }
 
-    let entropy: f64 = freq.iter()
+    let entropy: f64 = freq
+        .iter()
         .filter(|&&f| f > 0)
         .map(|&f| {
             let p = f as f64 / len;
@@ -337,7 +445,8 @@ pub fn re_packer(data: &[u8]) -> Value {
         indicators.push("high_entropy_sections".to_string());
     }
 
-    let section_count = data.windows(2)
+    let section_count = data
+        .windows(2)
         .filter(|w| w == b".text" || w == b".data" || w == b".rdata" || w == b".rsrc")
         .count();
 
@@ -362,24 +471,64 @@ pub fn pentest_analyze_service(service_name: &str, version: &str) -> Value {
     let mut score = 0u32;
 
     let known = [
-        ("ssh", "7.0", "high", "Older SSH - check for weak ciphers, check CVE-2016-0777"),
-        ("apache", "2.4.49", "critical", "CVE-2021-41773 - Path traversal RCE"),
-        ("apache", "2.4.50", "critical", "CVE-2021-42013 - Path traversal RCE"),
-        ("nginx", "1.20", "medium", "Check for HTTP request smuggling"),
-        ("mysql", "5.7", "high", "Check for CVE-2021-2022, authentication bypass"),
+        (
+            "ssh",
+            "7.0",
+            "high",
+            "Older SSH - check for weak ciphers, check CVE-2016-0777",
+        ),
+        (
+            "apache",
+            "2.4.49",
+            "critical",
+            "CVE-2021-41773 - Path traversal RCE",
+        ),
+        (
+            "apache",
+            "2.4.50",
+            "critical",
+            "CVE-2021-42013 - Path traversal RCE",
+        ),
+        (
+            "nginx",
+            "1.20",
+            "medium",
+            "Check for HTTP request smuggling",
+        ),
+        (
+            "mysql",
+            "5.7",
+            "high",
+            "Check for CVE-2021-2022, authentication bypass",
+        ),
         ("postgresql", "12", "medium", "Check for CVE-2020-25695"),
         ("redis", "5.0", "high", "Check if exposed without auth"),
-        ("tomcat", "9.0", "high", "Check for CVE-2025-24813, CVE-2020-9484"),
+        (
+            "tomcat",
+            "9.0",
+            "high",
+            "Check for CVE-2025-24813, CVE-2020-9484",
+        ),
         ("vsftpd", "2.3.4", "critical", "Backdoor (CVE-2011-2523)"),
         ("opensmtpd", "6.6", "critical", "CVE-2020-7247 - Root RCE"),
         ("drupal", "7", "critical", "Drupalgeddon (CVE-2018-7600)"),
-        ("wordpress", "5", "high", "Check for plugin vulnerabilities, CVE-2020-35489"),
+        (
+            "wordpress",
+            "5",
+            "high",
+            "Check for plugin vulnerabilities, CVE-2020-35489",
+        ),
     ];
 
     for (svc, ver, severity, desc) in &known {
         if service_name.to_lowercase().contains(*svc) && version.contains(*ver) {
             vulns.push(json!({"cve": desc.split(" - ").next().unwrap_or(""), "severity": severity, "description": desc}));
-            score += match *severity { "critical" => 40, "high" => 25, "medium" => 10, _ => 5 };
+            score += match *severity {
+                "critical" => 40,
+                "high" => 25,
+                "medium" => 10,
+                _ => 5,
+            };
         }
     }
 
@@ -458,7 +607,9 @@ pub fn forensics_analyze_logs(logs: &str) -> Value {
 
     let ip_pattern = regex::Regex::new(r#"\b(?:\d{1,3}\.){3}\d{1,3}\b"#).unwrap();
     let timestamp_pattern = regex::Regex::new(r#"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}"#).unwrap();
-    let error_pattern = regex::Regex::new(r#"(?i)(error|fail|denied|blocked|unauthorized|invalid|attack|exploit)"#).unwrap();
+    let error_pattern =
+        regex::Regex::new(r#"(?i)(error|fail|denied|blocked|unauthorized|invalid|attack|exploit)"#)
+            .unwrap();
 
     for line in logs.lines() {
         let mut event = json!({"raw": line, "type": "info"});
@@ -474,7 +625,10 @@ pub fn forensics_analyze_logs(logs: &str) -> Value {
 
         for ip in ip_pattern.find_iter(line) {
             let ip_str = ip.as_str();
-            if !ip_str.starts_with("10.") && !ip_str.starts_with("192.168.") && !ip_str.starts_with("172.16.") {
+            if !ip_str.starts_with("10.")
+                && !ip_str.starts_with("192.168.")
+                && !ip_str.starts_with("172.16.")
+            {
                 iocs.push(json!({
                     "type": "ip_address",
                     "ip": ip_str,
@@ -490,9 +644,8 @@ pub fn forensics_analyze_logs(logs: &str) -> Value {
         timeline.push(event);
     }
 
-    let unique_ips: std::collections::HashSet<&str> = ip_pattern.find_iter(logs)
-        .map(|m| m.as_str())
-        .collect();
+    let unique_ips: std::collections::HashSet<&str> =
+        ip_pattern.find_iter(logs).map(|m| m.as_str()).collect();
 
     json!({
         "total_lines": logs.lines().count(),
@@ -517,7 +670,10 @@ pub fn crypto_audit_keys(source: &str) -> Value {
         ("MD4", "Completely broken hash - use SHA-256"),
         ("MD5", "Collision-vulnerable hash - use SHA-256"),
         ("SHA-1", "Deprecated hash - use SHA-256 or SHA-3"),
-        ("RSA.*512", "RSA <2048 bits is broken - use RSA-4096 or Ed25519"),
+        (
+            "RSA.*512",
+            "RSA <2048 bits is broken - use RSA-4096 or Ed25519",
+        ),
         ("RSA.*1024", "RSA <2048 bits is weak - use RSA-4096"),
         ("EC.*P-192", "Weak curve - use P-256 or curve25519"),
         ("EC.*secp192", "Weak curve - use curve25519"),
@@ -553,7 +709,14 @@ pub fn osint_email_analyze(email: &str) -> Value {
     }
 
     let domain = parts[1];
-    let common_domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "proton.me", "protonmail.com"];
+    let common_domains = [
+        "gmail.com",
+        "yahoo.com",
+        "outlook.com",
+        "hotmail.com",
+        "proton.me",
+        "protonmail.com",
+    ];
 
     json!({
         "email": email,
@@ -605,9 +768,15 @@ pub fn malware_generate_yara(indicators: &Value) -> Value {
     let name = indicators["name"].as_str().unwrap_or("unknown_malware");
     let mut yara_rule = format!("rule {} {{\n", name.replace(' ', "_").to_uppercase());
     yara_rule.push_str("    meta:\n");
-    yara_rule.push_str(&format!("        description = \"Auto-generated YARA rule for {}\"\n", name));
+    yara_rule.push_str(&format!(
+        "        description = \"Auto-generated YARA rule for {}\"\n",
+        name
+    ));
     yara_rule.push_str("        author = \"AUDIT-Nexus MCP\"\n");
-    yara_rule.push_str(&format!("        date = \"{}\"\n", chrono::Local::now().format("%Y-%m-%d")));
+    yara_rule.push_str(&format!(
+        "        date = \"{}\"\n",
+        chrono::Local::now().format("%Y-%m-%d")
+    ));
     yara_rule.push_str("        severity = \"high\"\n");
     yara_rule.push_str("    strings:\n");
 
@@ -617,9 +786,17 @@ pub fn malware_generate_yara(indicators: &Value) -> Value {
             string_idx += 1;
             let s_str = s.as_str().unwrap_or("");
             if s_str.len() <= 128 {
-                yara_rule.push_str(&format!("        $s{} = \"{}\"\n", string_idx, s_str.escape_default()));
+                yara_rule.push_str(&format!(
+                    "        $s{} = \"{}\"\n",
+                    string_idx,
+                    s_str.escape_default()
+                ));
             } else {
-                yara_rule.push_str(&format!("        $s{} = {{ {} }}\n", string_idx, hex::encode(s_str.as_bytes())));
+                yara_rule.push_str(&format!(
+                    "        $s{} = {{ {} }}\n",
+                    string_idx,
+                    hex::encode(s_str.as_bytes())
+                ));
             }
         }
     }
@@ -627,7 +804,11 @@ pub fn malware_generate_yara(indicators: &Value) -> Value {
     if let Some(hex_patterns) = indicators["hex_patterns"].as_array() {
         for hp in hex_patterns {
             string_idx += 1;
-            yara_rule.push_str(&format!("        $h{} = {{ {} }}\n", string_idx, hp.as_str().unwrap_or("")));
+            yara_rule.push_str(&format!(
+                "        $h{} = {{ {} }}\n",
+                string_idx,
+                hp.as_str().unwrap_or("")
+            ));
         }
     }
 
@@ -636,7 +817,11 @@ pub fn malware_generate_yara(indicators: &Value) -> Value {
         yara_rule.push_str("        any of them\n");
     } else if string_idx > 1 {
         let conditions: Vec<String> = (1..=string_idx).map(|i| format!("$s{}", i)).collect();
-        yara_rule.push_str(&format!("        {} of ({})\n", (string_idx / 2).max(1), conditions.join(", ")));
+        yara_rule.push_str(&format!(
+            "        {} of ({})\n",
+            (string_idx / 2).max(1),
+            conditions.join(", ")
+        ));
     }
 
     yara_rule.push('}');
@@ -653,11 +838,14 @@ pub fn malware_generate_yara(indicators: &Value) -> Value {
 // ═══════════════════════════════════════════════════════════
 
 pub fn network_audit_firewall(rules_text: &str) -> Value {
-    let open_ports: Vec<&str> = rules_text.lines()
+    let open_ports: Vec<&str> = rules_text
+        .lines()
         .filter(|l| l.contains("ACCEPT") || l.contains("allow") || l.contains("permit"))
         .collect();
 
-    let has_default_deny = rules_text.contains("DROP") || rules_text.contains("REJECT") || rules_text.contains("deny all");
+    let has_default_deny = rules_text.contains("DROP")
+        || rules_text.contains("REJECT")
+        || rules_text.contains("deny all");
 
     let mut risky_rules = Vec::new();
     for rule in &open_ports {

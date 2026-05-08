@@ -277,7 +277,9 @@ impl SkillRegistry {
     }
 
     pub fn get_by_category(&self, category: SkillCategory) -> Vec<Skill> {
-        self.skills.read().unwrap()
+        self.skills
+            .read()
+            .unwrap()
             .values()
             .filter(|s| s.category == category)
             .cloned()
@@ -285,7 +287,9 @@ impl SkillRegistry {
     }
 
     pub fn get_for_seniority(&self, level: Seniority) -> Vec<Skill> {
-        self.skills.read().unwrap()
+        self.skills
+            .read()
+            .unwrap()
             .values()
             .filter(|s| s.min_seniority <= level)
             .cloned()
@@ -301,7 +305,9 @@ impl SkillRegistry {
     }
 
     pub fn assign_skill_to_agent(&self, agent_id: &str, skill_id: &str) {
-        self.agent_skills.write().unwrap()
+        self.agent_skills
+            .write()
+            .unwrap()
             .entry(agent_id.to_string())
             .or_default()
             .push(skill_id.to_string());
@@ -311,7 +317,8 @@ impl SkillRegistry {
         let agent_skills = self.agent_skills.read().unwrap();
         let skill_ids = agent_skills.get(agent_id).cloned().unwrap_or_default();
         let all_skills = self.skills.read().unwrap();
-        skill_ids.iter()
+        skill_ids
+            .iter()
             .filter_map(|id| all_skills.get(id).cloned())
             .collect()
     }
@@ -321,7 +328,8 @@ impl SkillRegistry {
         let skill_ids = agent_skills.get(agent_id).cloned().unwrap_or_default();
         let all_skills = self.skills.read().unwrap();
         skill_ids.iter().any(|sid| {
-            all_skills.get(sid)
+            all_skills
+                .get(sid)
                 .map(|s| s.tools.contains(&tool_name.to_string()))
                 .unwrap_or(false)
         })
