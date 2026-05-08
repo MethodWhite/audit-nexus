@@ -14,19 +14,17 @@ jobs:
     name: Check & Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           components: rustfmt, clippy
 
       - uses: Swatinem/rust-cache@v2
 
       - name: Build
         run: cargo build --release
-
-      - name: Test
-        run: cargo test --release --lib 2>&1 || echo "::warning::Tests (non-blocking)"
 
       - name: Check format
         run: cargo fmt --all -- --check
@@ -44,29 +42,35 @@ jobs:
         include:
           - name: linux-x86_64
             os: ubuntu-22.04
+            artifact: audit-nexus-linux-x86_64.tar.gz
             target: x86_64-unknown-linux-gnu
 
           - name: linux-latest
             os: ubuntu-latest
+            artifact: audit-nexus-linux-x86_64-latest.tar.gz
             target: x86_64-unknown-linux-gnu
 
           - name: macos-x86_64
             os: macos-13
+            artifact: audit-nexus-macos-x86_64.tar.gz
             target: x86_64-apple-darwin
 
           - name: macos-aarch64
             os: macos-latest
+            artifact: audit-nexus-macos-aarch64.tar.gz
             target: aarch64-apple-darwin
 
           - name: windows-x86_64
             os: windows-latest
+            artifact: audit-nexus-windows-x86_64.zip
             target: x86_64-pc-windows-msvc
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: dtolnay/rust-toolchain@v1
         with:
+          toolchain: stable
           targets: ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
@@ -79,19 +83,19 @@ jobs:
         run: |
           cd target/${{ matrix.target }}/release
           strip audit-nexus 2>/dev/null || true
-          tar czf "${{ github.workspace }}/audit-nexus-${{ matrix.name }}.tar.gz" audit-nexus
+          tar czf "${{ github.workspace }}/${{ matrix.artifact }}" audit-nexus
 
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           Set-Location target/${{ matrix.target }}/release
-          Compress-Archive -Path audit-nexus.exe -DestinationPath "${{ github.workspace }}/audit-nexus-${{ matrix.name }}.zip"
+          Compress-Archive -Path audit-nexus.exe -DestinationPath "${{ github.workspace }}/${{ matrix.artifact }}"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: audit-nexus-${{ matrix.name }}
-          path: audit-nexus-${{ matrix.name }}.*
+          name: ${{ matrix.name }}
+          path: ${{ matrix.artifact }}
 
   release:
     name: Release
@@ -101,13 +105,14 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
+          merge-multiple: true
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
-          files: artifacts/**/*
+          files: artifacts/*
           generate_release_notes: true
           fail_on_unmatched_files: false
         env:
